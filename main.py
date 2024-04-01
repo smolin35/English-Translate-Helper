@@ -1,15 +1,16 @@
 #!/usr/bin/python3
-
-
-
-
 import argparse
+
+import nltk
+import fitz
+from pathlib import Path
+
+import re
 
 parser = argparse.ArgumentParser(description="Выделение грамматических конструкций английского языка в PDF файлах")
 parser.add_argument("path", type=str, help="Путь до файла") 
 args = parser.parse_args()
 
-import nltk
 # Если пакет отсутствует, начните по его загрузке
 nltk.download('tagsets')
 nltk.download('punkt')
@@ -17,12 +18,20 @@ nltk.download('averaged_perceptron_tagger')
 
 #tagdict = nltk.data.load('help/tagsets/upenn_tagset.pickle')
 
-
-import fitz
-from pathlib import Path
-
 file_name = Path(args.path).stem
 file_dir_path = Path(args.path).parent.resolve()
+
+#https://stackoverflow.com/questions/5967500/how-to-correctly-sort-a-string-with-a-number-inside
+def atoi(text):
+    return int(text) if text.isdigit() else text
+
+def natural_keys(text):
+    '''
+    alist.sort(key=natural_keys) sorts in human order
+    http://nedbatchelder.com/blog/200712/human_sorting.html
+    (See Toothy's implementation in the comments)
+    '''
+    return [ atoi(c) for c in re.split(r'(\d+)', text) ]
 
 
 # Вычитывание разметки
@@ -34,20 +43,20 @@ for i,doc_page in enumerate(doc):
     page = {}
     for annot in doc_page.annots():
         page[annot.info['content']] = doc_page.get_text(clip=annot.rect)
-    keys = sorted(page.keys())
+    keys = sorted(page.keys(), key=natural_keys)
     print(f'{i}', keys)
     text.append(page)
 
 # Обыединение "разорванных" абзацев
 for page_i,page in enumerate(text):
-    keys = list(reversed(sorted(page.keys())))
+    keys = list(reversed(sorted(page.keys(), key=natural_keys)))
 #     print(f'{keys=}')
     for i,k in enumerate(keys):
         if len(k)>=3 and (k[-2] == 'p' or k[-1] == 'p'):
 #             print(k, k[-2])
             if k[-2] == 'p': # part prev page
                 pp_i = page_i-1
-                pp_keysRevers = reversed(sorted(text[pp_i].keys()))
+                pp_keysRevers = reversed( sorted(text[pp_i].keys(), key=natural_keys) )
                 
                 pp_k = None
                 for pp_k in pp_keysRevers : 
@@ -68,7 +77,7 @@ for page_i,page in enumerate(text):
 tokenaise_text = []
 for page in text:
     tokenaise_page = {}
-    keys = sorted(page.keys())
+    keys = sorted(page.keys(), key=natural_keys)
     for k in keys:
         sents = nltk.sent_tokenize(page[k])
         s = [nltk.word_tokenize(s) for s in sents]
@@ -161,7 +170,7 @@ def write_legend(file):
 def write_doc(file):
     for pi,page in enumerate(tokenaise_text):
         file.write(f'<h4>[--- Page {pi+1} ---]</h3>\n')
-        keys = sorted(page.keys())
+        keys = sorted(page.keys(), key=natural_keys)
         tag = ''
         close_tag = None
         for k in keys:
